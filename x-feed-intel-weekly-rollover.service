@@ -1,0 +1,15 @@
+[Unit]
+Description=X Feed Intel Weekly Cycle Rollover
+After=network.target
+
+[Service]
+Type=oneshot
+User=xfi
+Group=xfi
+WorkingDirectory=/opt/x-feed-intel
+Environment="PATH=/opt/x-feed-intel/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/x-feed-intel/venv/bin/python3 /opt/x-feed-intel/weekly_rollover.py
+StandardOutput=journal
+StandardError=journal
+Nice=10
+NoNewPrivileges=yes

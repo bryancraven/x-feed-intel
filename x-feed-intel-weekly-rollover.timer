@@ -1,0 +1,12 @@
+[Unit]
+Description=Run X Feed Intel weekly rollover at Friday 12:05 AM America/Chicago
+
+[Timer]
+# Align this with config.WEEKLY_CYCLE_TIMEZONE / WEEKLY_CYCLE_START_*.
+OnCalendar=Fri *-*-* 00:05:00
+TimeZone=America/Chicago
+Persistent=true
+Unit=x-feed-intel-weekly-rollover.service
+
+[Install]
+WantedBy=timers.target
