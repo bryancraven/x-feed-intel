@@ -1,18 +1,18 @@
 """Training data exporter — generates datasets from vote snapshots + impressions.
 
-Usage:
-    cd /path/to/x-feed-intel
-    python3 -m x_feed_intel.training.exporter summary
-    python3 -m x_feed_intel.training.exporter snapshots
-    python3 -m x_feed_intel.training.exporter impressions
-    python3 -m x_feed_intel.training.exporter all
+Usage (run from the repo root):
+    python training/exporter.py summary
+    python training/exporter.py snapshots
+    python training/exporter.py impressions
+    python training/exporter.py all
 """
 import csv
 import json
 import os
 import sys
 
-# Setup path for standalone CLI execution
+# Setup path for standalone CLI execution (training/ is a subdirectory)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import get_db
 import config
