@@ -2,6 +2,8 @@
 
 Automated X (Twitter) timeline intelligence platform for AI infrastructure market monitoring. Fetches timeline posts, classifies them with Claude AI for relevance, matches them to tracked topics, and provides a Flask dashboard for team review and voting.
 
+Originally developed to run natively on a Raspberry Pi, this OSS version is being generalized and security-hardened for broader deployment in non-RPi environments.
+
 ## Features
 
 - **Claude Haiku classification** -- binary relevance filter on incoming posts
