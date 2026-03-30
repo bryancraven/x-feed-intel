@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 logger = logging.getLogger("x_feed_intel")
 
-from . import config
+import config
 
 # ---------------------------------------------------------------------------
 # Singleton connection
@@ -1433,7 +1433,7 @@ class Database:
         return [dict(row) for row in cur.fetchall()]
 
     def _search_topics_semantic_distances(self, query: str, k: int) -> dict[int, float]:
-        from .vector_search import TopicVectorIndex
+        from vector_search import TopicVectorIndex
 
         idx = TopicVectorIndex.get_instance(self.conn)
         rows = idx.search_topic_ids_by_text(query, k=k)

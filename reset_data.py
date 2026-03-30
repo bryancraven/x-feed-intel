@@ -14,7 +14,7 @@ import os
 import sys
 
 
-from .database import get_db
+from database import get_db
 
 
 def _print_summary(summary: dict):

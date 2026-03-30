@@ -14,8 +14,8 @@ import sys
 
 # Setup path for standalone CLI execution
 
-from ..database import get_db
-from .. import config
+from database import get_db
+import config
 
 
 def export_vote_snapshots(output_path: str = None):

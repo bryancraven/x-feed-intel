@@ -5,16 +5,16 @@ import sys
 import traceback
 from datetime import datetime, timedelta
 
-from .logging_config import setup_service_logging
+from logging_config import setup_service_logging
 
 logger = setup_service_logging("x_feed_intel")
 
 # Now import our modules (after logging is set up)
-from . import config
-from .database import get_db
-from .x_client import XTimelineClient
-from .classifier import PostClassifier
-from .topic_matcher import TopicMatcher
+import config
+from database import get_db
+from x_client import XTimelineClient
+from classifier import PostClassifier
+from topic_matcher import TopicMatcher
 
 
 def main() -> int:
@@ -360,7 +360,7 @@ def main() -> int:
         # Step M1: Refresh engagement metrics (BEFORE summaries)
         if getattr(config, "METRICS_REFRESH_ENABLED", False):
             try:
-                from .metrics_refresher import MetricsRefresher
+                from metrics_refresher import MetricsRefresher
                 refresher = MetricsRefresher()
                 metrics_stats = refresher.refresh_metrics(db, active_topic_ids=active_topic_ids)
                 if metrics_stats["refreshed"] > 0:
@@ -429,7 +429,7 @@ def main() -> int:
         # Step M2: Refresh topic summaries for topics with enough new posts
         if getattr(config, "SUMMARY_REFRESH_ENABLED", False):
             try:
-                from .summary_generator import TopicSummaryGenerator
+                from summary_generator import TopicSummaryGenerator
                 summary_gen = TopicSummaryGenerator()
                 summary_result = summary_gen.refresh_stale_summaries(db)
                 if summary_result["refreshed"] > 0:

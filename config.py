@@ -447,18 +447,25 @@ OLD_CATEGORY_MAP = {
 
 
 def validate():
-    """Validate configuration before running. Raises ValueError on missing creds."""
+    """Validate configuration before running. Raises ValueError on missing creds.
+
+    X API credentials are only required when X_COLLECTION_ENABLED=1.
+    Set X_COLLECTION_ENABLED=0 to run in dashboard-only mode without X API keys.
+    """
     errors = []
-    if not X_CONSUMER_KEY:
-        errors.append("X_CONSUMER_KEY not set in .env")
-    if not X_CONSUMER_SECRET:
-        errors.append("X_CONSUMER_SECRET not set in .env")
-    if not X_ACCESS_TOKEN:
-        errors.append("X_ACCESS_TOKEN not set in .env")
-    if not X_ACCESS_TOKEN_SECRET:
-        errors.append("X_ACCESS_TOKEN_SECRET not set in .env")
-    if not X_USER_ID:
-        errors.append("X_USER_ID not set in .env")
+
+    if X_COLLECTION_ENABLED:
+        if not X_CONSUMER_KEY:
+            errors.append("X_CONSUMER_KEY not set in .env")
+        if not X_CONSUMER_SECRET:
+            errors.append("X_CONSUMER_SECRET not set in .env")
+        if not X_ACCESS_TOKEN:
+            errors.append("X_ACCESS_TOKEN not set in .env")
+        if not X_ACCESS_TOKEN_SECRET:
+            errors.append("X_ACCESS_TOKEN_SECRET not set in .env")
+        if not X_USER_ID:
+            errors.append("X_USER_ID not set in .env")
+
     if not ANTHROPIC_API_KEY:
         errors.append("ANTHROPIC_API_KEY not set in environment or .env")
 

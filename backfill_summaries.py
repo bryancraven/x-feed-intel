@@ -8,9 +8,9 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from . import config
-from .database import get_db
-from .summary_generator import TopicSummaryGenerator
+import config
+from database import get_db
+from summary_generator import TopicSummaryGenerator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("x_feed_intel.backfill")

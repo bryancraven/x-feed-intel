@@ -17,7 +17,7 @@ from typing import Optional
 
 import numpy as np
 
-from . import config
+import config
 
 logger = logging.getLogger("x_feed_intel")
 

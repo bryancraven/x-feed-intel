@@ -7,7 +7,7 @@ from typing import Optional
 
 import anthropic
 
-from . import config
+import config
 
 logger = logging.getLogger("x_feed_intel")
 

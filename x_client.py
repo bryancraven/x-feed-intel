@@ -6,7 +6,7 @@ from typing import Optional
 import requests
 from requests_oauthlib import OAuth1
 
-from . import config
+import config
 
 logger = logging.getLogger("x_feed_intel")
 

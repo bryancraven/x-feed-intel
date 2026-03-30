@@ -6,7 +6,7 @@ import sys
 from datetime import datetime
 
 
-from .database import get_db  # noqa: E402
+from database import get_db  # noqa: E402
 
 
 def main() -> int:

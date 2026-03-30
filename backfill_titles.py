@@ -12,8 +12,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import anthropic
 
-from . import config
-from .database import get_db
+import config
+from database import get_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("x_feed_intel.backfill_titles")
@@ -307,7 +307,7 @@ def main():
     if success > 0:
         print(f"\nRefreshing topic vectors for {success} renamed topics...", flush=True)
         try:
-            from .vector_search import TopicVectorIndex
+            from vector_search import TopicVectorIndex
             vec_index = TopicVectorIndex.get_instance(db.conn)
             all_topics = db.get_active_topics(limit=500)
             vec_index.sync_topic_vectors(all_topics, db)

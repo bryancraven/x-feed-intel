@@ -6,14 +6,14 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-from .logging_config import setup_service_logging
+from logging_config import setup_service_logging
 
 logger = setup_service_logging("x_feed_intel")
 
-from . import config
-from .database import get_db
-from .classifier import PostClassifier
-from .topic_matcher import TopicMatcher
+import config
+from database import get_db
+from classifier import PostClassifier
+from topic_matcher import TopicMatcher
 
 
 def _count_unclassified(db) -> int:

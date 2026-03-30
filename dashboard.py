@@ -15,13 +15,13 @@ from functools import wraps
 from typing import Optional
 from urllib.parse import urlencode
 
-from .logging_config import setup_service_logging
+from logging_config import setup_service_logging
 
 from flask import Flask, render_template, request, jsonify, Response, redirect, make_response, g, has_request_context, url_for, abort
 from werkzeug.security import check_password_hash
 
-from . import config
-from .database import get_db
+import config
+from database import get_db
 
 logger = setup_service_logging("x_feed_intel_dashboard")
 _SLOW_REQUEST_LOG_MS = float(os.environ.get("XFI_SLOW_REQUEST_LOG_MS", "350"))
@@ -1223,7 +1223,7 @@ def api_vote():
     # Capture training snapshot (non-blocking, non-fatal)
     try:
         with _timed_section("snapshot_vote"):
-            from .training.collector import snapshot_vote
+            from training.collector import snapshot_vote
             snapshot_vote(db, topic_id, voter_name, vote_type, skip_reason=skip_reason)
     except Exception:
         pass
@@ -1856,7 +1856,7 @@ def api_create_topic():
         # 5. Vectorize in background thread so response returns fast
         def _bg_vectorize(tid):
             try:
-                from .vector_search import TopicVectorIndex
+                from vector_search import TopicVectorIndex
                 bg_db = get_db()
                 idx = TopicVectorIndex.get_instance(bg_db.conn)
                 topic = bg_db.get_topic_by_id(tid)
@@ -1918,7 +1918,7 @@ def _quick_create_fetch_and_suggest(db, url):
         tweet_data = dict(row)
     else:
         # Fetch from X API
-        from .x_client import XTimelineClient
+        from x_client import XTimelineClient
         client = XTimelineClient()
         tweet = client.fetch_tweet_by_id(tweet_id)
         x_req_stats = getattr(client, "last_request_stats", {}) or {}
@@ -2059,7 +2059,7 @@ def api_quick_create_auto():
         # Background vectorization
         def _bg_vectorize(tid):
             try:
-                from .vector_search import TopicVectorIndex
+                from vector_search import TopicVectorIndex
                 bg_db = get_db()
                 idx = TopicVectorIndex.get_instance(bg_db.conn)
                 t = bg_db.get_topic_by_id(tid)
@@ -2107,7 +2107,7 @@ def _process_post_urls(db, topic_id, post_urls):
 
         # Fetch from X API
         try:
-            from .x_client import XTimelineClient
+            from x_client import XTimelineClient
             client = XTimelineClient()
             tweet = client.fetch_tweet_by_id(tweet_id)
             x_req_stats = getattr(client, "last_request_stats", {}) or {}
@@ -2171,7 +2171,7 @@ def api_edit_topic(topic_id):
         # Re-vectorize if name or description changed
         if "name" in updates or "description" in updates:
             try:
-                from .vector_search import TopicVectorIndex
+                from vector_search import TopicVectorIndex
                 idx = TopicVectorIndex.get_instance(db.conn)
                 topic = db.get_topic_by_id(topic_id)
                 if topic:
@@ -2610,7 +2610,7 @@ def api_split_execute(topic_id):
         # Background vectorize source + all new topics
         def _bg_vectorize(tid):
             try:
-                from .vector_search import TopicVectorIndex
+                from vector_search import TopicVectorIndex
                 bg_db = get_db()
                 idx = TopicVectorIndex.get_instance(bg_db.conn)
                 t = bg_db.get_topic_by_id(tid)
@@ -2659,7 +2659,7 @@ def api_retry_topic(ut_id):
         # Vectorize in background thread so response returns fast
         def _bg_vectorize_retry(tid):
             try:
-                from .vector_search import TopicVectorIndex
+                from vector_search import TopicVectorIndex
                 bg_db = get_db()
                 idx = TopicVectorIndex.get_instance(bg_db.conn)
                 topic = bg_db.get_topic_by_id(tid)

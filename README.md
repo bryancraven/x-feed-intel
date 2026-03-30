@@ -30,6 +30,11 @@ waitress (WSGI, :5050) -> dashboard.py (Flask)
                        -> static/dashboard.css + dashboard.js
 ```
 
+**Model selection rationale:**
+- Haiku 4.5: fast, cheap binary relevance filter (high volume, low latency)
+- Opus 4.6: best reasoning quality for nuanced topic matching and multi-topic summaries
+- Vector search: semantic pre-filtering reduces the number of topics sent to Opus, cutting cost and latency
+
 ## Quick Start
 
 ### 1. Clone and set up virtual environment
@@ -46,11 +51,13 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your API keys:
-# - ANTHROPIC_API_KEY (required)
-# - X API OAuth 1.0a credentials (required for fetching)
-# - GMAIL_ADDRESS / GMAIL_APP_PASSWORD (optional, for email notifications)
+# Edit .env — see Configuration table below for what each variable does
 ```
+
+At minimum you need:
+- `ANTHROPIC_API_KEY` — required for classification and topic matching
+- `SECRET_KEY` — generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`
+- `VOTER_NAMES` — comma-separated display names for dashboard users
 
 ### 3. Initialize database
 
@@ -61,35 +68,75 @@ python scripts/init_db.py
 ### 4. Run the dashboard
 
 ```bash
-python -m waitress --listen=0.0.0.0:5050 dashboard:app
-# or for development:
-# python -c "from dashboard import app; app.run(host='0.0.0.0', port=5050, debug=True)"
+# Production (waitress WSGI):
+waitress-serve --listen=0.0.0.0:5050 --threads=2 dashboard:app
+
+# Development (Flask dev server):
+python -c "from dashboard import app; app.run(host='0.0.0.0', port=5050, debug=True)"
 ```
 
-### 5. Run the fetcher (manually or via cron)
+### 5. Verify setup
 
 ```bash
-# Enable X collection first
-export X_COLLECTION_ENABLED=1
-python fetcher.py
+# Confirm database initialized and dashboard can import correctly:
+python -c "from database import Database; import config; db = Database(str(config.DB_PATH)); print('DB OK:', config.DB_PATH)"
 ```
+
+### 6. Run the fetcher (manually or via cron)
+
+X collection is disabled by default. Set `X_COLLECTION_ENABLED=1` in `.env` and provide X API credentials to enable.
+
+```bash
+# One-off manual fetch:
+X_COLLECTION_ENABLED=1 python fetcher.py
+
+# Or use the cron wrapper (handles locking and backlog clearing):
+./run_fetch.sh
+```
+
+## Dashboard-Only Mode
+
+You can run the dashboard without X API credentials to manage topics, view posts already in the database, and use the voting/triage UI. Set:
+
+```
+X_COLLECTION_ENABLED=0  # default
+```
+
+Only `ANTHROPIC_API_KEY` is required. X API credentials are only validated when `X_COLLECTION_ENABLED=1`.
 
 ## Configuration
 
 All configuration is in `config.py`, with secrets loaded from `.env` via python-dotenv.
 
-### Key Settings
+### Full Configuration Reference
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `X_COLLECTION_ENABLED` | `0` | Set to `1` to enable X API collection |
-| `CLASSIFICATION_BATCH_SIZE` | `20` | Posts per Haiku classification call |
-| `VECTOR_SEARCH_ENABLED` | `True` | Enable semantic pre-filtering |
-| `TOPIC_AUTO_PROMOTION_ENABLED` | `True` | Auto-promote candidates meeting thresholds |
-| `WEEKLY_PREP_TOPIC_LIMIT` | `20` | Target slide topics per week |
-| `METRICS_REFRESH_ENABLED` | `True` | Enable engagement metrics refresh |
-| `SUMMARY_REFRESH_ENABLED` | `True` | Enable automatic summary updates |
-| `ARCHIVE_AFTER_DAYS` | `14` | Prune posts older than this |
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for Haiku/Opus |
+| `SECRET_KEY` | Yes | — | Flask session key — generate a random 32-byte hex string |
+| `VOTER_NAMES` | Yes | — | Comma-separated display names; creates default users at first run |
+| `X_COLLECTION_ENABLED` | No | `0` | Set to `1` to enable X API collection |
+| `X_CONSUMER_KEY` | If collection enabled | — | X API consumer key (OAuth 1.0a) |
+| `X_CONSUMER_SECRET` | If collection enabled | — | X API consumer secret |
+| `X_ACCESS_TOKEN` | If collection enabled | — | X API access token |
+| `X_ACCESS_TOKEN_SECRET` | If collection enabled | — | X API access token secret |
+| `X_BEARER_TOKEN` | If collection enabled | — | X API bearer token |
+| `X_USER_ID` | If collection enabled | — | Your numeric X account ID (find at tweeterid.com) |
+| `GMAIL_ADDRESS` | No | — | Gmail address for email notifications |
+| `GMAIL_APP_PASSWORD` | No | — | Gmail App Password for SMTP auth |
+| `EMAIL_RECIPIENTS` | No | — | Comma-separated notification recipients |
+| `TRANSCRIPTION_INTEGRATION_ENABLED` | No | `0` | Enable webhook callbacks from video transcription pipeline |
+| `TRANSCRIPTION_INTEGRATION_TOKEN` | No | — | Shared auth token for transcription callbacks |
+| `TRANSCRIPTION_CALLBACK_URL` | No | `http://127.0.0.1:5050/...` | Callback endpoint URL |
+| `LOG_DIR` | No | `./logs` | Directory for log files |
+| `CLASSIFICATION_BATCH_SIZE` | No | `20` | Posts per Haiku classification call |
+| `VECTOR_SEARCH_ENABLED` | No | `True` | Enable semantic pre-filtering (requires sqlite-vec) |
+| `TOPIC_AUTO_PROMOTION_ENABLED` | No | `True` | Auto-promote candidates meeting thresholds |
+| `WEEKLY_PREP_TOPIC_LIMIT` | No | `20` | Target slide topics per week |
+| `METRICS_REFRESH_ENABLED` | No | `True` | Enable engagement metrics refresh |
+| `SUMMARY_REFRESH_ENABLED` | No | `True` | Enable automatic summary updates |
+| `ARCHIVE_AFTER_DAYS` | No | `14` | Prune posts older than this |
+| `WEEKLY_CYCLE_TIMEZONE` | No | `America/Chicago` | Timezone for weekly cycle cutoffs |
 
 ### Taxonomy
 
@@ -120,18 +167,39 @@ MACRO_FRAMES, INDUSTRY_NARRATIVES, GEOPOLITICS_POLICY, AI_ECONOMICS, DATA_CENTER
 | `POST` | `/api/topics/<id>/tier` | Set editorial tier override |
 | `POST` | `/api/topics` | Create a new topic |
 
-## Systemd Setup
+All endpoints require an authenticated session (login via the dashboard UI first).
 
-Copy the service files and adjust paths:
+## Deployment (Systemd)
+
+The service files default to `/opt/x-feed-intel` as the working directory. Adjust the paths before installing:
 
 ```bash
-sudo cp x-feed-intel-dashboard.service /etc/systemd/system/
-sudo cp x-feed-intel-weekly-rollover.service /etc/systemd/system/
-sudo cp x-feed-intel-weekly-rollover.timer /etc/systemd/system/
+# Edit the service file to match your install path:
+sed -i 's|/opt/x-feed-intel|/path/to/x-feed-intel|g' x-feed-intel-dashboard.service
 
+# Copy service file and set up EnvironmentFile:
+sudo cp x-feed-intel-dashboard.service /etc/systemd/system/
+sudo cp .env /etc/x-feed-intel.env
+sudo chmod 600 /etc/x-feed-intel.env
+```
+
+Then add `EnvironmentFile=/etc/x-feed-intel.env` to the `[Service]` section of the service file (or pass env vars another way). Reload and start:
+
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now x-feed-intel-dashboard.service
 sudo systemctl enable --now x-feed-intel-weekly-rollover.timer
+
+# Verify:
+sudo systemctl status x-feed-intel-dashboard.service
+journalctl -u x-feed-intel-dashboard.service -f
+```
+
+For cron-based fetching, add `run_fetch.sh` to crontab:
+
+```
+0 8-20 * * 1-5 /path/to/x-feed-intel/run_fetch.sh   # Hourly 8AM-8PM weekdays
+0 23 * * * /path/to/x-feed-intel/run_fetch.sh         # Nightly
 ```
 
 ## Docker
@@ -143,27 +211,47 @@ cp .env.example .env
 docker-compose up -d
 ```
 
-The dashboard will be available at `http://localhost:5050`.
+The dashboard will be available at `http://localhost:5050`. The `fetcher` service in docker-compose runs once on startup; use a cron job or Kubernetes CronJob to schedule recurring collection.
 
 ## Admin Tools
 
 ```bash
 # List users
-python -m reset_password --list
+python reset_password.py --list
 
-# Reset a password
-python -m reset_password <username> <newpass>
+# Reset a user password
+python reset_password.py <username> <newpass>
 
-# Backfill topic summaries
-python -m backfill_summaries --force --parallel 4
+# Backfill topic summaries (regenerate all, or just missing ones)
+python backfill_summaries.py --force --parallel 4
 
-# Reset content data (preserve users)
-python -m reset_data --dry-run
-python -m reset_data --yes --vacuum
+# Reset content data, preserve user accounts
+python reset_data.py --dry-run
+python reset_data.py --yes --vacuum
 
 # Run weekly rollover manually
 python weekly_rollover.py
 ```
+
+## Troubleshooting
+
+**`ImportError: attempted relative import with no known parent package` during init_db.py**
+All modules now use absolute imports. Run `python scripts/init_db.py` from the repo root with the venv active.
+
+**`Configuration errors: X_USER_ID not set in .env`**
+Add `X_USER_ID=<your-numeric-id>` to `.env`. Find your user ID at [tweeterid.com](https://tweeterid.com) or via the X API developer console. Only required when `X_COLLECTION_ENABLED=1`.
+
+**Dashboard starts but vector search is slow or disabled**
+Check the startup logs for `sqlite-vec loaded` or `sqlite-vec setup failed`. If disabled, ensure `sqlite-vec` is installed: `pip install sqlite-vec`. On aarch64 (Raspberry Pi), you may need a version ≥ 0.1.7a10.
+
+**`ValueError: Configuration errors` when running with `X_COLLECTION_ENABLED=0`**
+Only `ANTHROPIC_API_KEY` and dashboard credentials (`SECRET_KEY`, `VOTER_NAMES`) are required for dashboard-only mode. X API credentials are only validated when collection is enabled.
+
+**`waitress-serve: command not found`**
+Install with `pip install waitress` (already in requirements.txt). Use `waitress-serve`, not `python -m waitress`.
+
+**User management (add/remove users)**
+Users are created from `VOTER_NAMES` at first run. To add users later or reset passwords: `python reset_password.py --list` and `python reset_password.py <user> <newpass>`. There is no user deletion tool; remove directly from the database `users` table.
 
 ## Dependencies
 
@@ -172,9 +260,7 @@ python weekly_rollover.py
 - **anthropic** SDK (Haiku for classification, Opus for topic matching and summaries)
 - **requests** + **requests-oauthlib** (X API OAuth 1.0a)
 - **sentence-transformers** + **torch** (embedding model for vector search)
-- **sqlite-vec** (loaded as SQLite extension, not a pip package)
-
-Note: `sqlite-vec` must be installed separately. On aarch64 (e.g., Raspberry Pi 5), use version 0.1.7a10+.
+- **sqlite-vec** (vector similarity search extension)
 
 ## License
 

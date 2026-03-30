@@ -11,7 +11,7 @@ import os
 
 
 from werkzeug.security import generate_password_hash
-from .database import get_db
+from database import get_db
 
 
 def list_users():

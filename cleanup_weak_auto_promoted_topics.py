@@ -12,8 +12,8 @@ import sys
 from datetime import datetime
 
 
-from . import config  # noqa: E402
-from .database import Database  # noqa: E402
+import config  # noqa: E402
+from database import Database  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import anthropic
 
-from . import config
+import config
 
 logger = logging.getLogger("x_feed_intel")
 

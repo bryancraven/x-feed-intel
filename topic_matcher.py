@@ -14,8 +14,8 @@ from typing import Optional
 
 import anthropic
 
-from . import config
-from .database import get_db
+import config
+from database import get_db
 
 logger = logging.getLogger("x_feed_intel")
 
@@ -184,7 +184,7 @@ class TopicMatcher:
         all_topics = self.db.get_active_topics(limit=200)
         if config.VECTOR_SEARCH_ENABLED:
             try:
-                from .vector_search import TopicVectorIndex
+                from vector_search import TopicVectorIndex
                 vec_index = TopicVectorIndex.get_instance(self.db.conn)
                 vec_index.sync_topic_vectors(all_topics, self.db)
             except Exception as e:

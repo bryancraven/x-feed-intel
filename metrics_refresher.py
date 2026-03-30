@@ -3,8 +3,8 @@ import json
 import logging
 from datetime import datetime
 
-from . import config
-from .x_client import XTimelineClient
+import config
+from x_client import XTimelineClient
 
 logger = logging.getLogger("x_feed_intel")
 
