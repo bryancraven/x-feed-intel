@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Initialize the database schema and seed default users."""
+"""Initialize the database schema for X Feed Intel."""
 import sys
 import os
 

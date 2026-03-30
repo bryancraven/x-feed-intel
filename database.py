@@ -9,7 +9,7 @@ from typing import Optional
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from zoneinfo import ZoneInfo
 
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash
 
 logger = logging.getLogger("x_feed_intel")
 
@@ -4074,6 +4074,57 @@ class Database:
         cur = self.conn.execute("SELECT id, username, display_name, is_admin, created_at FROM users ORDER BY id")
         return [dict(row) for row in cur.fetchall()]
 
+    def count_users(self) -> int:
+        """Return the number of configured dashboard users."""
+        cur = self.conn.execute("SELECT COUNT(*) FROM users")
+        return int(cur.fetchone()[0])
+
+    def has_users(self) -> bool:
+        """Return True when at least one dashboard user exists."""
+        return self.count_users() > 0
+
+    def create_user(
+        self,
+        username: str,
+        display_name: str,
+        password: str,
+        *,
+        is_admin: bool = False,
+    ) -> dict:
+        """Create a dashboard user with an explicit password."""
+        normalized_username = config.normalize_username(username)
+        display_name = str(display_name or "").strip()
+        password = str(password or "")
+        if not normalized_username:
+            raise ValueError("username is required")
+        if not display_name:
+            raise ValueError("display_name is required")
+        if not password:
+            raise ValueError("password is required")
+        if self.get_user_by_username(normalized_username):
+            raise ValueError(f"user '{normalized_username}' already exists")
+
+        cur = self.conn.execute(
+            """
+            INSERT INTO users (username, display_name, password_hash, is_admin)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                normalized_username,
+                display_name,
+                generate_password_hash(password),
+                1 if is_admin else 0,
+            ),
+        )
+        self.conn.commit()
+        created = self.get_user_by_id(int(cur.lastrowid))
+        return dict(created) if created else {
+            "id": int(cur.lastrowid),
+            "username": normalized_username,
+            "display_name": display_name,
+            "is_admin": 1 if is_admin else 0,
+        }
+
     def create_session(self, user_id: int) -> str:
         """Create a new session token for a user. Returns the token."""
         token = secrets.token_urlsafe(32)
@@ -4118,7 +4169,7 @@ class Database:
         self.conn.commit()
 
     def seed_users(self, users_list: list, default_password: str) -> list[dict]:
-        """Idempotent: create users if they don't exist. Returns list of created users."""
+        """Legacy helper retained for backwards-compatible migrations only."""
         created = []
         for u in users_list:
             display_name = u["display_name"]
@@ -4129,16 +4180,19 @@ class Database:
             if cur.fetchone():
                 continue  # Already exists
 
-            username = config._gen_username(display_name)
-            pw_hash = generate_password_hash(default_password)
-            self.conn.execute("""
-                INSERT INTO users (username, display_name, password_hash, is_admin)
-                VALUES (?, ?, ?, ?)
-            """, (username, display_name, pw_hash, u.get("is_admin", 0)))
-            created.append({"username": username, "display_name": display_name})
+            username = config.normalize_username(display_name)
+            suffix = 1
+            while self.get_user_by_username(username):
+                suffix += 1
+                username = f"{config.normalize_username(display_name)}_{suffix}"
 
-        if created:
-            self.conn.commit()
+            self.create_user(
+                username=username,
+                display_name=display_name,
+                password=default_password,
+                is_admin=bool(u.get("is_admin", 0)),
+            )
+            created.append({"username": username, "display_name": display_name})
         return created
 
     # ------------------------------------------------------------------

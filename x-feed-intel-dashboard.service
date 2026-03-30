@@ -4,13 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=xfi
-Group=xfi
-WorkingDirectory=/opt/x-feed-intel
-Environment="PATH=/opt/x-feed-intel/venv/bin:/usr/local/bin:/usr/bin:/bin"
+User=__RUN_AS_USER__
+Group=__RUN_AS_GROUP__
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=-__ENV_FILE__
 Environment="XFI_COMMON_CTX_STATS_TTL_SEC=5"
 Environment="XFI_SLOW_REQUEST_LOG_MS=350"
-ExecStart=/opt/x-feed-intel/venv/bin/waitress-serve --listen=0.0.0.0:5050 --threads=2 dashboard:app
+ExecStart=__VENV_BIN_DIR__/waitress-serve --listen=0.0.0.0:5050 --threads=2 dashboard:app
 Restart=always
 RestartSec=30
 StandardOutput=journal

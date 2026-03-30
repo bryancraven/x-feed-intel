@@ -57,12 +57,13 @@ cp .env.example .env
 At minimum you need:
 - `ANTHROPIC_API_KEY` — required for classification and topic matching
 - `SECRET_KEY` — generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`
-- `VOTER_NAMES` — comma-separated display names for dashboard users
+- one bootstrapped admin account created with `python bootstrap_admin.py <username> <display_name> <password>`
 
 ### 3. Initialize database
 
 ```bash
 python scripts/init_db.py
+python bootstrap_admin.py admin Admin 'change-me-now'
 ```
 
 ### 4. Run the dashboard
@@ -102,7 +103,7 @@ You can run the dashboard without X API credentials to manage topics, view posts
 X_COLLECTION_ENABLED=0  # default
 ```
 
-Only `ANTHROPIC_API_KEY` is required. X API credentials are only validated when `X_COLLECTION_ENABLED=1`.
+Only `ANTHROPIC_API_KEY`, `SECRET_KEY`, and a bootstrapped dashboard user are required. X API credentials are only validated when `X_COLLECTION_ENABLED=1`.
 
 ## Configuration
 
@@ -114,7 +115,8 @@ All configuration is in `config.py`, with secrets loaded from `.env` via python-
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | Yes | — | Anthropic API key for Haiku/Opus |
 | `SECRET_KEY` | Yes | — | Flask session key — generate a random 32-byte hex string |
-| `VOTER_NAMES` | Yes | — | Comma-separated display names; creates default users at first run |
+| `VOTER_NAMES` | No | `Admin,User1,User2` | Optional fallback list for team-vote UI labels; dashboard logins are managed explicitly via bootstrap/user tools |
+| `SESSION_COOKIE_SECURE` | No | `0` | Set to `1` when the dashboard is served over HTTPS |
 | `X_COLLECTION_ENABLED` | No | `0` | Set to `1` to enable X API collection |
 | `X_CONSUMER_KEY` | If collection enabled | — | X API consumer key (OAuth 1.0a) |
 | `X_CONSUMER_SECRET` | If collection enabled | — | X API consumer secret |
@@ -171,24 +173,15 @@ All endpoints require an authenticated session (login via the dashboard UI first
 
 ## Deployment (Systemd)
 
-The service files default to `/opt/x-feed-intel` as the working directory. Adjust the paths before installing:
+Use the installer script to render the systemd units with your actual repo path, venv, user, and env-file location:
 
 ```bash
-# Edit the service file to match your install path:
-sed -i 's|/opt/x-feed-intel|/path/to/x-feed-intel|g' x-feed-intel-dashboard.service
+chmod +x install_systemd.sh
+sudo RUN_AS_USER=xfi INSTALL_DIR=/path/to/x-feed-intel ./install_systemd.sh
 
-# Copy service file and set up EnvironmentFile:
-sudo cp x-feed-intel-dashboard.service /etc/systemd/system/
-sudo cp .env /etc/x-feed-intel.env
-sudo chmod 600 /etc/x-feed-intel.env
-```
-
-Then add `EnvironmentFile=/etc/x-feed-intel.env` to the `[Service]` section of the service file (or pass env vars another way). Reload and start:
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now x-feed-intel-dashboard.service
-sudo systemctl enable --now x-feed-intel-weekly-rollover.timer
+# Bootstrap the first dashboard admin before starting the service:
+python bootstrap_admin.py admin Admin 'change-me-now'
+sudo systemctl start x-feed-intel-dashboard.service
 
 # Verify:
 sudo systemctl status x-feed-intel-dashboard.service
@@ -206,18 +199,28 @@ For cron-based fetching, add `run_fetch.sh` to crontab:
 
 ```bash
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your API keys and SECRET_KEY
 
-docker-compose up -d
+# Initialize the database schema
+docker compose run --rm dashboard python scripts/init_db.py
+
+# Bootstrap the first admin user
+docker compose run --rm dashboard python bootstrap_admin.py admin Admin 'change-me-now'
+
+# Start the dashboard and fetcher
+docker compose up -d
 ```
 
-The dashboard will be available at `http://localhost:5050`. The `fetcher` service in docker-compose runs once on startup; use a cron job or Kubernetes CronJob to schedule recurring collection.
+The dashboard container initializes the schema on startup but will fail fast until at least one dashboard user exists. The `fetcher` service in docker-compose runs once on startup; use a cron job or Kubernetes CronJob to schedule recurring collection.
 
 ## Admin Tools
 
 ```bash
 # List users
 python reset_password.py --list
+
+# Create a user
+python reset_password.py --create analyst Analyst 'change-me-now'
 
 # Reset a user password
 python reset_password.py <username> <newpass>
@@ -245,13 +248,13 @@ Add `X_USER_ID=<your-numeric-id>` to `.env`. Find your user ID at [tweeterid.com
 Check the startup logs for `sqlite-vec loaded` or `sqlite-vec setup failed`. If disabled, ensure `sqlite-vec` is installed: `pip install sqlite-vec`. On aarch64 (Raspberry Pi), you may need a version ≥ 0.1.7a10.
 
 **`ValueError: Configuration errors` when running with `X_COLLECTION_ENABLED=0`**
-Only `ANTHROPIC_API_KEY` and dashboard credentials (`SECRET_KEY`, `VOTER_NAMES`) are required for dashboard-only mode. X API credentials are only validated when collection is enabled.
+Only `ANTHROPIC_API_KEY`, `SECRET_KEY`, and at least one bootstrapped dashboard user are required for dashboard-only mode. X API credentials are only validated when collection is enabled.
 
 **`waitress-serve: command not found`**
 Install with `pip install waitress` (already in requirements.txt). Use `waitress-serve`, not `python -m waitress`.
 
 **User management (add/remove users)**
-Users are created from `VOTER_NAMES` at first run. To add users later or reset passwords: `python reset_password.py --list` and `python reset_password.py <user> <newpass>`. There is no user deletion tool; remove directly from the database `users` table.
+Fresh deployments do not auto-create users. Bootstrap the first admin with `python bootstrap_admin.py <username> <display_name> <password>`, then use `python reset_password.py --create <username> <display_name> <password>` for additional accounts. There is no user deletion tool; remove accounts directly from the `users` table if needed.
 
 ## Dependencies
 

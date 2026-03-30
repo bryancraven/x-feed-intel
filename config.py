@@ -1,6 +1,6 @@
 """Configuration for X Feed Intel."""
 import os
-import secrets as _secrets
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -217,8 +217,16 @@ DEFAULT_SKIP_REASON = "not_good_fit"
 # ---------------------------------------------------------------------------
 # Authentication
 # ---------------------------------------------------------------------------
+SECRET_KEY = os.environ.get("SECRET_KEY", "").strip()
+ALLOW_LEGACY_DB_SECRET_KEY = os.environ.get(
+    "ALLOW_LEGACY_DB_SECRET_KEY", "1"
+).strip().lower() in {"1", "true", "yes", "on"}
 SESSION_COOKIE_NAME = "xfi_session"
 SESSION_MAX_AGE_DAYS = 30
+SESSION_COOKIE_SECURE = os.environ.get(
+    "SESSION_COOKIE_SECURE", "0"
+).strip().lower() in {"1", "true", "yes", "on"}
+SESSION_COOKIE_SAMESITE = os.environ.get("SESSION_COOKIE_SAMESITE", "Lax").strip() or "Lax"
 STATIC_DIR = BASE_DIR / "static"
 
 # ---------------------------------------------------------------------------
@@ -265,16 +273,10 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 _recipients = os.environ.get("EMAIL_RECIPIENTS", "")
 EMAIL_RECIPIENTS = [r.strip() for r in _recipients.split(",") if r.strip()]
 
-def _gen_username(name: str) -> str:
-    """Generate a username like 'admin_a3f1' from a display name."""
-    return f"{name.lower()}_{_secrets.token_hex(2)}"
-
-DEFAULT_USERS = [
-    {"display_name": "Admin", "is_admin": 1},
-    {"display_name": "User1", "is_admin": 0},
-    {"display_name": "User2", "is_admin": 0},
-]
-DEFAULT_PASSWORD = "changeme"
+def normalize_username(name: str) -> str:
+    """Generate a filesystem-safe, login-safe username from free-form input."""
+    slug = re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().lower()).strip("_")
+    return slug or "user"
 
 # ---------------------------------------------------------------------------
 # Relevance topics (used in classification prompt)

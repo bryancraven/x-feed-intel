@@ -4,11 +4,11 @@ After=network.target
 
 [Service]
 Type=oneshot
-User=xfi
-Group=xfi
-WorkingDirectory=/opt/x-feed-intel
-Environment="PATH=/opt/x-feed-intel/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/opt/x-feed-intel/venv/bin/python3 /opt/x-feed-intel/weekly_rollover.py
+User=__RUN_AS_USER__
+Group=__RUN_AS_GROUP__
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=-__ENV_FILE__
+ExecStart=__PYTHON_BIN__ __INSTALL_DIR__/weekly_rollover.py
 StandardOutput=journal
 StandardError=journal
 Nice=10

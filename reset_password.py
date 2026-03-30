@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Admin password reset — run via SSH on the Pi.
+"""User management helper for X Feed Intel.
 
 Usage:
-    python3 -m x_feed_intel.reset_password                    # interactive
-    python3 -m x_feed_intel.reset_password bryan_a3f1 newpass  # CLI args
-    python3 -m x_feed_intel.reset_password --list              # show all users
+    python3 reset_password.py --list
+    python3 reset_password.py <username> <newpass>
+    python3 reset_password.py --create <username> <display_name> <password> [--admin]
 """
 import sys
-import os
 
 
 from werkzeug.security import generate_password_hash
@@ -51,11 +50,35 @@ def reset_password(username=None, new_pass=None):
     print(f"Password updated for {user['display_name']} ({username})")
 
 
+def create_user(username: str, display_name: str, password: str, *, is_admin: bool = False):
+    """Create a dashboard user with an explicit password."""
+    db = get_db()
+    created = db.create_user(
+        username=username,
+        display_name=display_name,
+        password=password,
+        is_admin=is_admin,
+    )
+    role = "admin" if created.get("is_admin") else "user"
+    print(f"Created {role} {created['display_name']} ({created['username']})")
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
 
     if "--list" in args or "-l" in args:
         list_users()
+    elif "--create" in args:
+        create_idx = args.index("--create")
+        create_args = args[create_idx + 1 :]
+        is_admin = False
+        if "--admin" in create_args:
+            create_args.remove("--admin")
+            is_admin = True
+        if len(create_args) != 3:
+            print("Usage: python3 reset_password.py --create <username> <display_name> <password> [--admin]")
+            sys.exit(1)
+        create_user(create_args[0], create_args[1], create_args[2], is_admin=is_admin)
     elif len(args) >= 2:
         reset_password(args[0], args[1])
     elif len(args) == 1:

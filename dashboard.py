@@ -223,41 +223,47 @@ def _parse_bool_arg(raw_value, default: bool) -> bool:
         return False
     return bool(default)
 
-# Generate a persistent secret key (stored in DB state table)
-def _get_or_create_secret_key(db):
+# Resolve Flask secret key from env first, then legacy DB state when allowed.
+def _load_flask_secret_key(db):
+    configured_key = str(getattr(config, "SECRET_KEY", "") or "").strip()
+    if configured_key:
+        now = datetime.utcnow().isoformat()
+        db.conn.execute(
+            """
+            INSERT INTO state (key, value, updated_at) VALUES ('flask_secret_key', ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            """,
+            (configured_key, now),
+        )
+        db.conn.commit()
+        return configured_key
+
     cur = db.conn.execute("SELECT value FROM state WHERE key = 'flask_secret_key'")
     row = cur.fetchone()
-    if row:
+    if row and getattr(config, "ALLOW_LEGACY_DB_SECRET_KEY", True):
         return row["value"]
-    key = secrets.token_hex(32)
-    now = datetime.utcnow().isoformat()
-    db.conn.execute("""
-        INSERT INTO state (key, value, updated_at) VALUES ('flask_secret_key', ?, ?)
-        ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?
-    """, (key, now, key, now))
-    db.conn.commit()
-    return key
 
-# ------------------------------------------------------------------
-# Initialize database once at startup (not per-request)
-# ------------------------------------------------------------------
-with app.app_context():
-    _db = get_db()
-    _db.init_db()
+    raise RuntimeError(
+        "SECRET_KEY is required before starting x-feed-intel. "
+        "Set it in the environment or .env for this deployment."
+    )
 
-    # Set Flask secret key
-    app.secret_key = _get_or_create_secret_key(_db)
 
-    # Seed default users (idempotent)
-    created_users = _db.seed_users(config.DEFAULT_USERS, config.DEFAULT_PASSWORD)
-    if created_users:
-        print("\n=== NEW USER ACCOUNTS CREATED ===")
-        for u in created_users:
-            print(f"  {u['display_name']:8s} -> username: {u['username']}  password: {config.DEFAULT_PASSWORD}")
-        print("=================================\n")
+def initialize_app() -> None:
+    """Initialize persistent dashboard state at process startup."""
+    with app.app_context():
+        db = get_db()
+        db.init_db()
+        app.secret_key = _load_flask_secret_key(db)
+        if not db.has_users():
+            raise RuntimeError(
+                "No dashboard users configured. "
+                "Run 'python bootstrap_admin.py <username> <display_name> <password>' first."
+            )
+        db.delete_expired_sessions()
 
-    # Cleanup expired sessions
-    _db.delete_expired_sessions()
+
+initialize_app()
 
 
 # ------------------------------------------------------------------
@@ -411,6 +417,11 @@ def _common_ctx(**overrides):
         except Exception:
             pass
 
+    try:
+        voter_names = [u["display_name"] for u in db.get_all_users()]
+    except Exception:
+        voter_names = list(config.VOTER_NAMES)
+
     ctx = {
         "stats": stats,
         "api_stats": api_stats,
@@ -451,7 +462,7 @@ def _common_ctx(**overrides):
         "sort_by": "popular_week",
         "topic_status_filter": "all",
         "votes": {},
-        "voter_names": config.VOTER_NAMES,
+        "voter_names": voter_names or config.VOTER_NAMES,
         "current_user": getattr(request, 'user', None),
         "taxonomy": config.TAXONOMY,
     }
@@ -570,7 +581,8 @@ def login():
         token,
         max_age=config.SESSION_MAX_AGE_DAYS * 86400,
         httponly=True,
-        samesite="Lax",
+        secure=bool(getattr(config, "SESSION_COOKIE_SECURE", False)),
+        samesite=str(getattr(config, "SESSION_COOKIE_SAMESITE", "Lax")),
     )
     return resp
 

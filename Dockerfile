@@ -12,7 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN mkdir -p data logs
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 5050
 
-CMD ["sh", "-c", "python -c 'from database import init_db; init_db()' && python -m waitress --listen=0.0.0.0:5050 dashboard:app"]
+CMD ["/app/docker-entrypoint.sh"]
