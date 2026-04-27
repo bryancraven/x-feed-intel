@@ -7,4 +7,4 @@ python-dotenv>=1.0.0
 sentence-transformers>=2.2.0
 torch>=2.0.0
 werkzeug>=3.0.0
-sqlite-vec>=0.1.0
+sqlite-vec>=0.1.9
